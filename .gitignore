@@ -1,0 +1,44 @@
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== Logs =====
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== Environment =====
+.env
+.env.*
+
+# ===== Runtime data (SQLite) =====
+data.db
+data.db-*
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*-wal
+*-shm
+
+# ===== Node.js / Vite =====
+node_modules/
+**/node_modules/
+.pnpm-store/
+.pnp.*
+.cache/
+.vite/
+dist/
+build/
+
+# Build outputs
+TV_Server_Node/server/public/
+server/public/
+web/dist/

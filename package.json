@@ -1,0 +1,12 @@
+{
+  "name": "tv_server",
+  "private": true,
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "build": "npm --workspace web run build",
+    "start": "npm --workspace server start"
+  }
+}
