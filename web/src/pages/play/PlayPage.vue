@@ -2194,6 +2194,14 @@ const requestPlay = async () => {
   const panKeyAtCall = selectedPanKey.value;
   const idxAtCall = idx;
   const epNameAtCall = ep && ep.name ? String(ep.name) : '';
+  const openListFileNameAtCall = (() => {
+    const url = ep && typeof ep.url === 'string' ? ep.url : '';
+    if (url) {
+      const rawNames = extractRawNamesFromEpisodeUrl(url);
+      if (rawNames && rawNames[0]) return String(rawNames[0] || '').trim();
+    }
+    return epNameAtCall ? String(epNameAtCall).trim() : '';
+  })();
 
   playRequestState.seq += 1;
   const seqAtCall = playRequestState.seq;
@@ -2219,7 +2227,7 @@ const requestPlay = async () => {
           !!props.bootstrap?.settings?.openListApiBase &&
           !!props.bootstrap?.settings?.openListToken &&
           !!props.bootstrap?.settings?.openListQuarkTvMount &&
-          !!epNameAtCall;
+          !!openListFileNameAtCall;
 
         const fetchPlay = async (query) => {
           const raw = await requestCatSpider({
@@ -2249,55 +2257,66 @@ const requestPlay = async () => {
 	      let finalUrl = playResult.url;
       let finalHeaders = playResult.rawHeaders;
 
-        if (shouldQuarkTv) {
-          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
-          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
-          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
-          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
-          const mount = normalizeOpenListMountPath(openListMount);
-          const name = typeof epNameAtCall === 'string' ? epNameAtCall.trim() : '';
-          const refreshPath = `${mount}${userDir}/${name}/`.replace(/\/{2,}/g, '/');
+	        if (shouldQuarkTv) {
+	          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
+	          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
+	          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
+	          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
+	          const mount = normalizeOpenListMountPath(openListMount);
+	          const name = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
+	          const refreshPath = `${mount}${userDir}/${name}/`.replace(/\/{2,}/g, '/');
+	          let quarkTvFallbackPlay = null;
 
-          let refreshOk = false;
-          try {
-            refreshOk = await withRetries(3, async () => {
-              await openListRefreshPath({ apiBase: openListApiBase, token: openListToken, path: refreshPath });
-              return true;
-            });
-          } catch (_e) {
-            refreshOk = false;
-          }
+	          let refreshOk = false;
+	          try {
+	            refreshOk = await withRetries(3, async () => {
+	              await openListRefreshPath({ apiBase: openListApiBase, token: openListToken, path: refreshPath });
+	              return true;
+	            });
+	          } catch (_e) {
+	            refreshOk = false;
+	          }
 
-          if (!refreshOk) {
-            try {
-              playResult = await fetchPlay({ quark_tv: '0' });
-            } catch (_e) {}
-          }
+	          if (!refreshOk) {
+	            try {
+	              quarkTvFallbackPlay = await fetchPlay({ quark_tv: '0' });
+	            } catch (_e) {}
+	          }
 
-          try {
-            const directUrl = await withRetries(3, async () => {
-              return await openListResolveRedirectedUrl({
-                apiBase: openListApiBase,
-                mountPath: openListMount,
-                username: tvUser,
-                fileName: name,
-              });
-            });
-            if (typeof directUrl === 'string' && directUrl.trim()) {
-              finalUrl = directUrl.trim();
-              finalHeaders = {};
-            }
-          } catch (_e) {
-            // Fallback: request without quark_tv so CatPawOpen uses its normal logic.
-            try {
-              playResult = await fetchPlay(undefined);
-              if (playResult && playResult.url) {
-                finalUrl = playResult.url;
-                finalHeaders = playResult.rawHeaders || {};
-              }
-            } catch (__e) {}
-          }
-        }
+	          try {
+	            const directUrl = await withRetries(3, async () => {
+	              return await openListResolveRedirectedUrl({
+	                apiBase: openListApiBase,
+	                mountPath: openListMount,
+	                username: tvUser,
+	                fileName: name,
+	              });
+	            });
+	            if (typeof directUrl === 'string' && directUrl.trim()) {
+	              finalUrl = directUrl.trim();
+	              finalHeaders = {};
+	            }
+	          } catch (_e) {
+	            if (!quarkTvFallbackPlay) {
+	              try {
+	                quarkTvFallbackPlay = await fetchPlay({ quark_tv: '0' });
+	              } catch (_e2) {}
+	            }
+	            if (quarkTvFallbackPlay && quarkTvFallbackPlay.url) {
+	              finalUrl = quarkTvFallbackPlay.url;
+	              finalHeaders = quarkTvFallbackPlay.rawHeaders || {};
+	            } else {
+	              // Fallback: request without quark_tv so CatPawOpen uses its normal logic.
+	              try {
+	                playResult = await fetchPlay(undefined);
+	                if (playResult && playResult.url) {
+	                  finalUrl = playResult.url;
+	                  finalHeaders = playResult.rawHeaders || {};
+	                }
+	              } catch (__e) {}
+	            }
+	          }
+	        }
 
       try {
         const preferredPan = guessPreferredPanFromLabel(src && src.label ? String(src.label) : '');
