@@ -1906,7 +1906,9 @@ const joinBaseUrl = (base, relativePath) => {
 
 const goProxyPickState = {
   selectedBase: '',
+  selectedPan: '',
   inFlight: null,
+  inFlightPan: '',
 };
 
 const speedTestGoProxyBase = async (base, bytes = 2 * 1024 * 1024, timeoutMs = 8000) => {
@@ -1949,17 +1951,22 @@ const speedTestGoProxyBase = async (base, bytes = 2 * 1024 * 1024, timeoutMs = 8
   }
 };
 
-const pickGoProxyBaseForPlayback = async () => {
+const pickGoProxyBaseForPlayback = async (pan = '') => {
   const servers = normalizeGoProxyServers(props.bootstrap?.settings?.goProxyServers);
   if (!servers.length) return '';
+  const p = typeof pan === 'string' ? pan.trim().toLowerCase() : '';
+  const eligible = (p === 'baidu' || p === 'quark')
+    ? servers.filter((s) => !!(s && s.pans && s.pans[p]))
+    : servers;
+  if (!eligible.length) return '';
   const autoSelect = !!props.bootstrap?.settings?.goProxyAutoSelect;
-  if (!autoSelect) return servers[0].base;
+  if (!autoSelect) return eligible[0].base;
 
-  if (goProxyPickState.selectedBase) return goProxyPickState.selectedBase;
-  if (goProxyPickState.inFlight) return await goProxyPickState.inFlight;
+  if (goProxyPickState.selectedBase && goProxyPickState.selectedPan === p) return goProxyPickState.selectedBase;
+  if (goProxyPickState.inFlight && goProxyPickState.inFlightPan === p) return await goProxyPickState.inFlight;
 
   goProxyPickState.inFlight = (async () => {
-    const tests = servers.map(async (s) => {
+    const tests = eligible.map(async (s) => {
       const base = s && s.base ? s.base : '';
       if (!base) return { base: '', bps: 0, ok: false };
       try {
@@ -1973,14 +1980,19 @@ const pickGoProxyBaseForPlayback = async () => {
     const best = results
       .filter((r) => r && r.ok && r.base)
       .sort((a, b) => (b.bps || 0) - (a.bps || 0))[0];
-    const chosen = best && best.base ? best.base : servers[0].base;
+    const chosen = best && best.base ? best.base : eligible[0].base;
     goProxyPickState.selectedBase = chosen || '';
+    goProxyPickState.selectedPan = p;
     return goProxyPickState.selectedBase;
   })();
+  goProxyPickState.inFlightPan = p;
   try {
     return await goProxyPickState.inFlight;
   } finally {
-    goProxyPickState.inFlight = null;
+    if (goProxyPickState.inFlightPan === p) {
+      goProxyPickState.inFlight = null;
+      goProxyPickState.inFlightPan = '';
+    }
   }
 };
 
@@ -2024,7 +2036,7 @@ const maybeUseGoProxyForPlayback = async (playUrl, playHeaders, preferredPan = '
   if (!proxyHint) return { url: playUrl, headers: playHeaders };
   const pan = detectGoProxyPan(playUrl, playHeaders, preferredPan);
   if (!pan) return { url: playUrl, headers: playHeaders };
-  const base = await pickGoProxyBaseForPlayback();
+  const base = await pickGoProxyBaseForPlayback(pan);
   if (!base) return { url: playUrl, headers: playHeaders };
   const { proxyUrl } = await registerGoProxyToken({ base, pan, url: playUrl, headers: playHeaders });
   return { url: proxyUrl, headers: {} };

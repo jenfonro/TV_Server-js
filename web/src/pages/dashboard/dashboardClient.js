@@ -652,6 +652,31 @@ export function initDashboardPage(bootstrap = {}) {
 
 	      const baseSpan = createEl('span', { className: 'min-w-0 flex-1 truncate', text: server.base });
 
+	      const toggles = createEl('div', { className: 'flex items-center gap-3 shrink-0' });
+
+	      const mkToggle = (panKey, labelText) => {
+	        const wrap = createEl('div', { className: 'flex items-center gap-2' });
+	        const t = createEl('span', { className: CLS.mutedXs, text: labelText });
+	        const { label, input } = createSwitchLabel({
+	          checked: !!(server.pans && server.pans[panKey]),
+	          onChange: () => {
+	            const next = goProxyServers.slice();
+	            const cur = next[idx];
+	            if (!cur) return;
+	            cur.pans = Object.assign({}, cur.pans, { [panKey]: !!input.checked });
+	            next[idx] = cur;
+	            goProxyServers = next;
+	            renderGoProxyServerList();
+	          },
+	        });
+	        wrap.appendChild(t);
+	        wrap.appendChild(label);
+	        return wrap;
+	      };
+
+	      toggles.appendChild(mkToggle('baidu', '百度'));
+	      toggles.appendChild(mkToggle('quark', '夸克'));
+
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className =
@@ -663,6 +688,7 @@ export function initDashboardPage(bootstrap = {}) {
       });
 
       li.appendChild(baseSpan);
+      li.appendChild(toggles);
       li.appendChild(delBtn);
       goProxyServerList.appendChild(li);
     });

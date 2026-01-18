@@ -410,7 +410,7 @@
 		                    <span class="enable-slider"></span>
 		                  </label>
 		                </div>
-		                <div class="text-xs text-gray-500 dark:text-gray-400">开：直链+Header；关：走 CatPawOpen Proxy。</div>
+		                <div class="text-xs text-gray-500 dark:text-gray-400">开启后 CatPawOpen 始终返回直链。</div>
 		              </div>
 		              </div>
 		              <div class="pt-1 flex justify-start">
