@@ -2308,33 +2308,31 @@ export function initDashboardPage(bootstrap = {}) {
           !!normalizedMount ||
           tvMode;
 
-        if (hasAny) {
-          if (!normalizedBaseWithSlash) {
-            setOpenListStatus('error', 'OpenList 服务器地址不是合法 URL');
-            return;
-          }
-          if (!String(tokenRaw || '').trim()) {
-            setOpenListStatus('error', 'OpenList 令牌未设置');
-            return;
-          }
-          if (!normalizedMount) {
-            setOpenListStatus('error', '夸克TV挂载目录未设置');
-            return;
-          }
-
-          await validateOpenListMount({
-            apiBase: normalizedBaseWithSlash,
-            token: tokenRaw,
-            mountPath: normalizedMount,
-          });
+        const { resp, data } = await postForm(openListSettingsForm.action, formToFields(openListSettingsForm));
+        const savedOk = !!(resp && resp.ok && data && data.success);
+        if (!savedOk) {
+          setOpenListStatus('error', (data && data.message) || '保存失败');
+          return;
         }
 
-        const { resp, data } = await postForm(openListSettingsForm.action, formToFields(openListSettingsForm));
-        if (resp.ok && data && data.success) setOpenListStatus('success', '保存成功');
-        else setOpenListStatus('error', (data && data.message) || '保存失败');
+        // Even if validation fails, keep settings saved (per requirement).
+        if (hasAny) {
+          try {
+            await validateOpenListMount({
+              apiBase: normalizedBaseWithSlash,
+              token: tokenRaw,
+              mountPath: normalizedMount,
+            });
+            setOpenListStatus('success', '保存成功');
+          } catch (err) {
+            const msg = err && err.message ? String(err.message) : '验证失败';
+            setOpenListStatus('error', `${msg}（已保存）`);
+          }
+        } else {
+          setOpenListStatus('success', '保存成功');
+        }
       } catch (_e) {
-        const msg = _e && _e.message ? String(_e.message) : '保存失败';
-        setOpenListStatus('error', msg);
+        setOpenListStatus('error', '保存失败');
       } finally {
         openListSaving = false;
       }

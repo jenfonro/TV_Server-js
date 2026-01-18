@@ -490,7 +490,6 @@
 	                  placeholder="http://127.0.0.1:5244/"
 	                  :value="bootstrap.settings.openListApiBase"
 	                >
-	                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">用于请求 OpenList API（会自动补齐末尾的 /）。</p>
 	              </div>
 	              <div>
 	                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">OpenList 令牌</label>
@@ -520,7 +519,6 @@
 	                  placeholder="/quark/"
 	                  :value="bootstrap.settings.openListQuarkTvMount"
 	                >
-	                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">将自动补齐开头与结尾的 /。</p>
 	              </div>
 	              <div class="pt-1 flex justify-start">
 	                <button type="submit" class="btn-green">保存</button>
