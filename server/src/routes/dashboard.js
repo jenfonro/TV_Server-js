@@ -53,6 +53,16 @@ function normalizeHttpBase(value) {
   return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
 }
 
+function normalizeMountPath(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '';
+  let p = raw;
+  if (!p.startsWith('/')) p = `/${p}`;
+  if (!p.endsWith('/')) p = `${p}/`;
+  p = p.replace(/\/{2,}/g, '/');
+  return p;
+}
+
 function normalizeGoProxyServers(value) {
   const list = Array.isArray(value) ? value : safeParseJsonArray(String(value || '[]'));
   const out = [];
@@ -564,6 +574,10 @@ function createDashboardRouter() {
       success: true,
       siteName: getSetting('site_name') || '',
       catPawOpenApiBase: getSetting('catpawopen_api_base') || '',
+      openListApiBase: getSetting('openlist_api_base') || '',
+      openListToken: getSetting('openlist_token') || '',
+      openListQuarkTvMode: String(getSetting('openlist_quark_tv_mode') || '') === '1',
+      openListQuarkTvMount: getSetting('openlist_quark_tv_mount') || '',
       goProxyEnabled: String(getSetting('goproxy_enabled') || '') === '1',
       goProxyAutoSelect: String(getSetting('goproxy_auto_select') || '') === '1',
       goProxyServersJson: getSetting('goproxy_servers') || '[]',
@@ -572,6 +586,27 @@ function createDashboardRouter() {
       doubanImgProxy: getSetting('douban_img_proxy') || 'direct-browser',
       doubanImgCustom: getSetting('douban_img_custom') || '',
     });
+  });
+
+  router.post('/openlist/save', requireAdmin, (req, res) => {
+    const openListApiBase = typeof req.body.openListApiBase === 'string' ? req.body.openListApiBase.trim() : '';
+    const openListToken = typeof req.body.openListToken === 'string' ? req.body.openListToken.trim() : '';
+    const openListQuarkTvMode = parseFormBool(req.body.openListQuarkTvMode);
+    const openListQuarkTvMount =
+      typeof req.body.openListQuarkTvMount === 'string' ? req.body.openListQuarkTvMount.trim() : '';
+
+    if (openListApiBase) {
+      const normalized = normalizeHttpBase(openListApiBase);
+      if (!normalized) return res.status(400).json({ success: false, message: 'OpenList 服务器地址不是合法 URL' });
+      setSetting('openlist_api_base', normalized.endsWith('/') ? normalized : `${normalized}/`);
+    } else {
+      setSetting('openlist_api_base', '');
+    }
+    setSetting('openlist_token', openListToken || '');
+    setSetting('openlist_quark_tv_mode', openListQuarkTvMode ? '1' : '0');
+    setSetting('openlist_quark_tv_mount', openListQuarkTvMount ? normalizeMountPath(openListQuarkTvMount) : '');
+
+    return res.json({ success: true });
   });
 
   router.post('/goproxy/save', requireAdmin, async (req, res) => {

@@ -379,7 +379,7 @@
 	          <div class="admin-card space-y-4">
 	            <form id="catPawOpenSettingsForm" method="post" action="/dashboard/catpawopen/save" class="space-y-4">
 	              <div class="flex items-center gap-3">
-	                <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">连接设置</div>
+	                <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">CatPawOpen 设置</div>
 	                <div id="catPawOpenSaveStatus" class="text-xs hidden whitespace-nowrap text-gray-500 dark:text-gray-400"></div>
 	              </div>
 		              <div>
@@ -470,6 +470,58 @@
 	                </ul>
 	              </div>
 
+	              <div class="pt-1 flex justify-start">
+	                <button type="submit" class="btn-green">保存</button>
+	              </div>
+	            </form>
+	          </div>
+
+	          <div class="admin-card space-y-4">
+	            <div class="flex items-center gap-3">
+	              <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">OpenList 设置</div>
+	              <div id="openListSaveStatus" class="text-xs hidden whitespace-nowrap text-gray-500 dark:text-gray-400"></div>
+	            </div>
+	            <form id="openListSettingsForm" method="post" action="/dashboard/openlist/save" class="space-y-4">
+	              <div>
+	                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">OpenList 服务器地址</label>
+	                <input
+	                  name="openListApiBase"
+	                  class="tv-field"
+	                  placeholder="http://127.0.0.1:5244/"
+	                  :value="bootstrap.settings.openListApiBase"
+	                >
+	                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">用于请求 OpenList API（会自动补齐末尾的 /）。</p>
+	              </div>
+	              <div>
+	                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">OpenList 令牌</label>
+	                <input
+	                  name="openListToken"
+	                  class="tv-field"
+	                  type="password"
+	                  autocomplete="off"
+	                  placeholder="token"
+	                  :value="bootstrap.settings.openListToken"
+	                >
+	              </div>
+	              <div class="space-y-1 pt-1">
+	                <div class="text-sm font-medium text-gray-700 dark:text-gray-200">夸克 TV 模式</div>
+	                <div>
+	                  <label class="enable-switch" title="夸克 TV 模式">
+	                    <input id="openListQuarkTvMode" name="openListQuarkTvMode" type="checkbox" />
+	                    <span class="enable-slider"></span>
+	                  </label>
+	                </div>
+	              </div>
+	              <div>
+	                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">夸克 TV 挂载目录</label>
+	                <input
+	                  name="openListQuarkTvMount"
+	                  class="tv-field"
+	                  placeholder="/quark/"
+	                  :value="bootstrap.settings.openListQuarkTvMount"
+	                >
+	                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">将自动补齐开头与结尾的 /。</p>
+	              </div>
 	              <div class="pt-1 flex justify-start">
 	                <button type="submit" class="btn-green">保存</button>
 	              </div>

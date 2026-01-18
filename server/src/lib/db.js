@@ -194,6 +194,10 @@ function initDatabase() {
     seed('video_source_md5', '');
     seed('catpawopen_api_base', 'http://127.0.0.1:3006/');
     seed('catpawopen_proxy', '');
+    seed('openlist_api_base', '');
+    seed('openlist_token', '');
+    seed('openlist_quark_tv_mode', '0');
+    seed('openlist_quark_tv_mount', '');
     seed('video_source_site_status', '{}');
     seed('video_source_site_home', '{}');
     seed('video_source_site_order', '[]');

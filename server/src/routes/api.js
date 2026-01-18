@@ -635,6 +635,10 @@ function createApiRouter() {
           settings.videoSourceUrl = get('video_source_url') || '';
           settings.videoSourceApiBase = get('video_source_api_base') || '';
           settings.catPawOpenApiBase = get('catpawopen_api_base') || '';
+          settings.openListApiBase = get('openlist_api_base') || '';
+          settings.openListToken = get('openlist_token') || '';
+          settings.openListQuarkTvMode = String(get('openlist_quark_tv_mode') || '') === '1';
+          settings.openListQuarkTvMount = get('openlist_quark_tv_mount') || '';
           settings.goProxyEnabled = String(get('goproxy_enabled') || '') === '1';
           settings.goProxyAutoSelect = String(get('goproxy_auto_select') || '') === '1';
           settings.goProxyServers = normalizeGoProxyServers(get('goproxy_servers') || '[]');
