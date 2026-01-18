@@ -516,7 +516,7 @@ const loadCatProxyRealtime = async () => {
   if (catProxyLoading.value) return;
   catProxyLoading.value = true;
   try {
-    const url = new URL('admin/proxy', normalized);
+    const url = new URL('admin/settings', normalized);
     const headers = {};
     const u = (tvUser.value || '').trim();
     if (u) headers['X-TV-User'] = u;
@@ -527,15 +527,8 @@ const loadCatProxyRealtime = async () => {
       throw new Error(msg);
     }
     let proxy = '';
-    if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'code')) {
-      if (data.code !== 0) throw new Error((data && data.message) || 'CatPawOpen 代理接口返回异常');
-      const d = data.data;
-      if (typeof d === 'string') proxy = d;
-      else if (d && typeof d === 'object' && typeof d.proxy === 'string') proxy = d.proxy;
-    } else if (data && typeof data === 'object' && typeof data.proxy === 'string') {
-      proxy = data.proxy;
-    } else if (typeof data === 'string') {
-      proxy = data;
+    if (data && typeof data === 'object' && data.success === true && data.settings && typeof data.settings.proxy === 'string') {
+      proxy = data.settings.proxy;
     }
     catProxy.value = proxy || '';
     catProxyStatus.value = 'ok';
@@ -643,13 +636,13 @@ const save = async () => {
     if (savedCatApiBase.value) {
       try {
         if (!apiBaseChanged) {
-          await requestCatWebsiteJson('admin/proxy', {
+          await requestCatWebsiteJson('admin/settings', {
             method: 'PUT',
             body: JSON.stringify({ proxy: String(catProxy.value || '') }),
           });
           catProxyStatus.value = 'ok';
-	        } else {
-	          await loadCatProxyRealtime();
+		        } else {
+		          await loadCatProxyRealtime();
 	          // Persist the reloaded proxy to TV_Server so next open shows correct value.
 	          try {
 	            await apiPutJson(
