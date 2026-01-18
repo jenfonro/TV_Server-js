@@ -25,10 +25,14 @@ export async function requestCatSpider({
   action,
   spiderApi,
   payload,
+  query,
+  headers: extraHeaders,
 }) {
   const safeAction = typeof action === 'string' ? action.trim() : '';
   const safeSpider = typeof spiderApi === 'string' ? spiderApi.trim() : '';
   const body = payload && typeof payload === 'object' ? payload : {};
+  const q = query && typeof query === 'object' ? query : null;
+  const extra = extraHeaders && typeof extraHeaders === 'object' ? extraHeaders : null;
 
   if (!safeAction) throw new Error('action 不能为空');
   if (!safeSpider || !safeSpider.startsWith('/spider/')) throw new Error('站点 API 无效');
@@ -38,7 +42,15 @@ export async function requestCatSpider({
 
   const spiderPath = safeSpider.endsWith('/') ? safeSpider.slice(0, -1) : safeSpider;
   const target = new URL(`${spiderPath}/${encodeURIComponent(safeAction)}`, normalizedBase);
-  const headers = { 'Content-Type': 'application/json' };
+  if (q) {
+    Object.entries(q).forEach(([k, v]) => {
+      const key = typeof k === 'string' ? k.trim() : '';
+      if (!key) return;
+      if (v == null) return;
+      target.searchParams.set(key, String(v));
+    });
+  }
+  const headers = { 'Content-Type': 'application/json', ...(extra ? extra : {}) };
   const u = typeof username === 'string' ? username.trim() : '';
   if (u) headers['X-TV-User'] = u;
 

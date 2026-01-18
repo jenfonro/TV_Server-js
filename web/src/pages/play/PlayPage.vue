@@ -1904,6 +1904,132 @@ const joinBaseUrl = (base, relativePath) => {
   }
 };
 
+const normalizeHttpBaseWithSlash = (value) => {
+  const b = normalizeHttpBase(value);
+  return b ? `${b}/` : '';
+};
+
+const sanitizeTvUsername = (input) => {
+  const raw = String(input || '').trim();
+  if (!raw) return 'admin';
+  const safe = raw.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  return safe || 'admin';
+};
+
+const normalizeOpenListMountPath = (value) => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '';
+  let p = raw;
+  if (!p.startsWith('/')) p = `/${p}`;
+  if (!p.endsWith('/')) p = `${p}/`;
+  p = p.replace(/\/{2,}/g, '/');
+  return p;
+};
+
+const encodePathPreserveSlashes = (path) => {
+  const raw = typeof path === 'string' ? path : '';
+  if (!raw) return '';
+  return raw
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+};
+
+const isQuarkPanLabel = (label) => {
+  const s = typeof label === 'string' ? label : '';
+  if (!s) return false;
+  if (s.includes('夸克')) return true;
+  return s.toLowerCase().includes('quark');
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const withRetries = async (attempts, fn) => {
+  const n = Number(attempts);
+  const max = Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
+  let lastErr = null;
+  for (let i = 0; i < max; i += 1) {
+    try {
+      // 0ms / 300ms / 800ms
+      if (i === 1) await sleep(300);
+      if (i === 2) await sleep(800);
+      return await fn(i + 1);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('retry failed');
+};
+
+const openListRefreshPath = async ({ apiBase, token, path }) => {
+  const base = normalizeHttpBaseWithSlash(apiBase);
+  if (!base) throw new Error('openlist base invalid');
+  const t = typeof token === 'string' ? token.trim() : '';
+  if (!t) throw new Error('openlist token missing');
+  const p = typeof path === 'string' ? path : '';
+  if (!p) throw new Error('openlist path missing');
+
+  const url = new URL('api/fs/get', base).toString();
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: t },
+    credentials: 'omit',
+    body: JSON.stringify({
+      path: p,
+      password: '',
+      page: 1,
+      per_page: 0,
+      refresh: true,
+    }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  const code = data && typeof data.code === 'number' ? data.code : 0;
+  if (resp.ok && code === 200) return true;
+  const msg = (data && data.message) ? String(data.message) : `HTTP ${resp.status}`;
+  const err = new Error(msg);
+  err.status = resp.status;
+  throw err;
+};
+
+const openListResolveRedirectedUrl = async ({ apiBase, mountPath, username, fileName }) => {
+  const base = normalizeHttpBaseWithSlash(apiBase);
+  if (!base) throw new Error('openlist base invalid');
+  const mount = normalizeOpenListMountPath(mountPath);
+  if (!mount) throw new Error('openlist mount missing');
+  const userDir = `TV_Server_${sanitizeTvUsername(username)}`;
+  const name = typeof fileName === 'string' ? fileName.trim() : '';
+  if (!name) throw new Error('file name missing');
+
+  const rawPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/');
+  const encoded = encodePathPreserveSlashes(rawPath);
+  const downloadUrl = new URL(`d${encoded.startsWith('/') ? '' : '/'}${encoded}`, base).toString();
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const t = setTimeout(() => {
+    try {
+      if (controller) controller.abort();
+    } catch (_e) {}
+  }, 8000);
+  try {
+    const resp = await fetch(downloadUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      credentials: 'omit',
+      cache: 'no-store',
+      signal: controller ? controller.signal : undefined,
+    });
+    const finalUrl = resp && typeof resp.url === 'string' ? resp.url.trim() : '';
+    try {
+      if (resp && resp.body && typeof resp.body.cancel === 'function') resp.body.cancel();
+    } catch (_e) {}
+    if (!finalUrl) throw new Error('openlist redirect url empty');
+    if (!/^https?:\/\//i.test(finalUrl)) throw new Error('openlist redirect url invalid');
+    return finalUrl;
+  } finally {
+    clearTimeout(t);
+  }
+};
+
 const goProxyPickState = {
   selectedBase: '',
   selectedPan: '',
@@ -2086,26 +2212,93 @@ const requestPlay = async () => {
 		    const serverBase = props.bootstrap?.settings?.catPawOpenApiBase || '';
 		    const apiBase = (role === 'user' ? userBase : (userBase || serverBase)).trim();
 		    const tvUser = props.bootstrap?.user?.username || '';
-	    const raw = await requestCatSpider({
-	      apiBase,
-      username: tvUser,
-      action: 'play',
-      spiderApi: api,
-      payload: { flag, id },
-	    });
-		    const rewritten = rewritePlayPayloadUrls(raw, apiBase, tvUser);
-		    const payload = normalizePlayPayload(rewritten);
-		    const url = pickFirstPlayableUrl(payload);
-		    if (!url) {
+
+        const shouldQuarkTv =
+          !!props.bootstrap?.settings?.openListQuarkTvMode &&
+          isQuarkPanLabel(src && src.label ? String(src.label) : '') &&
+          !!props.bootstrap?.settings?.openListApiBase &&
+          !!props.bootstrap?.settings?.openListToken &&
+          !!props.bootstrap?.settings?.openListQuarkTvMount &&
+          !!epNameAtCall;
+
+        const fetchPlay = async (query) => {
+          const raw = await requestCatSpider({
+            apiBase,
+            username: tvUser,
+            action: 'play',
+            spiderApi: api,
+            payload: { flag, id },
+            query: query && typeof query === 'object' ? query : undefined,
+          });
+          const rewritten = rewritePlayPayloadUrls(raw, apiBase, tvUser);
+          const payload = normalizePlayPayload(rewritten);
+          const url = pickFirstPlayableUrl(payload);
+          const rawHeaders = payload && payload.header && typeof payload.header === 'object' ? payload.header : {};
+          const proxyHintFromPayload = !!(payload && typeof payload === 'object' && payload.proxyHint === true);
+          return { raw, payload, url, rawHeaders, proxyHintFromPayload };
+        };
+
+        let playResult = await fetchPlay(shouldQuarkTv ? { quark_tv: '1' } : undefined);
+		    if (!playResult.url) {
           if (seqAtCall === playRequestState.seq) playError.value = '无可用播放地址';
 		      return;
 		    }
-	      const rawHeaders = payload && payload.header && typeof payload.header === 'object' ? payload.header : {};
-	      const proxyHintFromPayload = !!(payload && typeof payload === 'object' && payload.proxyHint === true);
+
 	      const goProxyEnabled = !!props.bootstrap?.settings?.goProxyEnabled;
-	      const proxyHint = goProxyEnabled || proxyHintFromPayload;
-	      let finalUrl = url;
-      let finalHeaders = rawHeaders;
+	      const proxyHint = goProxyEnabled || playResult.proxyHintFromPayload;
+	      let finalUrl = playResult.url;
+      let finalHeaders = playResult.rawHeaders;
+
+        if (shouldQuarkTv) {
+          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
+          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
+          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
+          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
+          const mount = normalizeOpenListMountPath(openListMount);
+          const name = typeof epNameAtCall === 'string' ? epNameAtCall.trim() : '';
+          const refreshPath = `${mount}${userDir}/${name}/`.replace(/\/{2,}/g, '/');
+
+          let refreshOk = false;
+          try {
+            refreshOk = await withRetries(3, async () => {
+              await openListRefreshPath({ apiBase: openListApiBase, token: openListToken, path: refreshPath });
+              return true;
+            });
+          } catch (_e) {
+            refreshOk = false;
+          }
+
+          if (!refreshOk) {
+            try {
+              playResult = await fetchPlay({ quark_tv: '0' });
+            } catch (_e) {}
+          }
+
+          try {
+            const directUrl = await withRetries(3, async () => {
+              return await openListResolveRedirectedUrl({
+                apiBase: openListApiBase,
+                mountPath: openListMount,
+                username: tvUser,
+                fileName: name,
+              });
+            });
+            if (typeof directUrl === 'string' && directUrl.trim()) {
+              finalUrl = directUrl.trim();
+              finalHeaders = {};
+            }
+          } catch (_e) {
+            // Fallback: request without quark_tv so CatPawOpen uses its normal logic.
+            try {
+              playResult = await fetchPlay(undefined);
+              if (playResult && playResult.url) {
+                finalUrl = playResult.url;
+                finalHeaders = playResult.rawHeaders || {};
+              }
+            } catch (__e) {}
+          }
+        }
+
       try {
         const preferredPan = guessPreferredPanFromLabel(src && src.label ? String(src.label) : '');
         const out = await maybeUseGoProxyForPlayback(finalUrl, finalHeaders, preferredPan, proxyHint);
