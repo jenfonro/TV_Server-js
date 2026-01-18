@@ -1997,10 +1997,11 @@ const openListResolveRedirectedUrl = async ({ apiBase, mountPath, username, file
   const mount = normalizeOpenListMountPath(mountPath);
   if (!mount) throw new Error('openlist mount missing');
   const userDir = `TV_Server_${sanitizeTvUsername(username)}`;
-  const name = typeof fileName === 'string' ? fileName.trim() : '';
+  const nameRaw = typeof fileName === 'string' ? fileName.trim() : '';
+  const name = nameRaw.replace(/^\/+|\/+$/g, '');
   if (!name) throw new Error('file name missing');
 
-  const rawPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/');
+  const rawPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '');
   const encoded = encodePathPreserveSlashes(rawPath);
   const downloadUrl = new URL(`d${encoded.startsWith('/') ? '' : '/'}${encoded}`, base).toString();
 
