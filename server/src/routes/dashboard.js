@@ -9,7 +9,6 @@ const {
   resolveCatPawOpenFullConfigUrl,
   normalizeCatPawOpenApiBaseOrThrow,
   resolveCatPawOpenWebsiteUrl,
-  resolveCatPawOpenAdminUrl,
   resolveCatPawOpenSpiderUrl,
 } = require('../lib/catpaw');
 const { httpGetJsonWithRedirects, httpRequestJsonWithRedirects, httpGetStatusWithRedirects } = require('../lib/httpClient');
@@ -59,10 +58,21 @@ function normalizeGoProxyServers(value) {
   const out = [];
   const seen = new Set();
   for (const it of list) {
-    const base = normalizeHttpBase(it && typeof it.base === 'string' ? it.base : '');
+    const base =
+      typeof it === 'string'
+        ? normalizeHttpBase(it)
+        : normalizeHttpBase(it && typeof it.base === 'string' ? it.base : '');
     if (!base || seen.has(base)) continue;
-    const pans = it && typeof it.pans === 'object' && it.pans ? it.pans : {};
-    out.push({ base, pans: { baidu: !!pans.baidu, quark: !!pans.quark } });
+    const pans = it && typeof it === 'object' && typeof it.pans === 'object' && it.pans ? it.pans : {};
+    const hasBaidu = Object.prototype.hasOwnProperty.call(pans, 'baidu');
+    const hasQuark = Object.prototype.hasOwnProperty.call(pans, 'quark');
+    out.push({
+      base,
+      pans: {
+        baidu: hasBaidu ? !!pans.baidu : true,
+        quark: hasQuark ? !!pans.quark : true,
+      },
+    });
     seen.add(base);
   }
   return out;
@@ -93,17 +103,6 @@ function resolveCatPawOpenPanSavePath(key, type) {
   }
 
   return '';
-}
-
-async function saveGoProxySettingsToCatPawOpen(apiBase, payload, headers = {}) {
-  const trimmed = typeof apiBase === 'string' ? apiBase.trim() : '';
-  if (!trimmed) throw new Error('CatPawOpen 接口地址未设置');
-  const url = resolveCatPawOpenAdminUrl(trimmed, 'admin/goproxy');
-  return httpRequestJsonWithRedirects(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...(headers && typeof headers === 'object' ? headers : {}) },
-    body: JSON.stringify(payload || {}),
-  });
 }
 
 async function savePanSettingToCatPawOpen(apiBase, key, type, payload, headers = {}) {
@@ -565,6 +564,7 @@ function createDashboardRouter() {
       success: true,
       siteName: getSetting('site_name') || '',
       catPawOpenApiBase: getSetting('catpawopen_api_base') || '',
+      goProxyEnabled: String(getSetting('goproxy_enabled') || '') === '1',
       goProxyAutoSelect: String(getSetting('goproxy_auto_select') || '') === '1',
       goProxyServersJson: getSetting('goproxy_servers') || '[]',
       doubanDataProxy: getSetting('douban_data_proxy') || 'direct',
@@ -575,10 +575,12 @@ function createDashboardRouter() {
   });
 
   router.post('/goproxy/save', requireAdmin, async (req, res) => {
+    const enabled = parseFormBool(req.body.goProxyEnabled);
     const autoSelect = parseFormBool(req.body.goProxyAutoSelect);
     const serversJson = typeof req.body.goProxyServersJson === 'string' ? req.body.goProxyServersJson : '[]';
     const servers = normalizeGoProxyServers(serversJson);
 
+    setSetting('goproxy_enabled', enabled ? '1' : '0');
     setSetting('goproxy_auto_select', autoSelect ? '1' : '0');
     setSetting('goproxy_servers', JSON.stringify(servers));
     // See /catpawopen/save: sync is client-side.

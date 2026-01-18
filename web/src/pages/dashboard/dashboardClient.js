@@ -26,6 +26,7 @@ export function initDashboardPage(bootstrap = {}) {
 
   const goProxySettingsForm = document.getElementById('goProxySettingsForm');
   const goProxySaveStatus = document.getElementById('goProxySaveStatus');
+  const goProxyEnabledInput = document.getElementById('goProxyEnabled');
   const goProxyAutoSelectInput = document.getElementById('goProxyAutoSelect');
   const goProxyServersJsonInput = document.getElementById('goProxyServersJson');
   const goProxyServerInput = document.getElementById('goProxyServerInput');
@@ -424,10 +425,8 @@ export function initDashboardPage(bootstrap = {}) {
   const setCatPawOpenRemoteState = (state, message = '') => {
     const remoteSettingsEl = document.getElementById('catPawOpenRemoteSettings');
     const remoteErrorEl = document.getElementById('catPawOpenRemoteError');
-    const goProxyEnabledWrapEl = document.getElementById('catPawOpenGoProxyEnabledWrap');
     try {
       if (remoteSettingsEl) remoteSettingsEl.classList.toggle('hidden', state !== 'ready');
-      if (goProxyEnabledWrapEl) goProxyEnabledWrapEl.classList.toggle('hidden', state !== 'ready');
       if (remoteErrorEl) {
         const showErr = state === 'error';
         remoteErrorEl.classList.toggle('hidden', !showErr);
@@ -455,26 +454,19 @@ export function initDashboardPage(bootstrap = {}) {
       return { ok: false, skipped: true, reason: 'unconfigured' };
     }
     try {
-      const [proxyResp, goProxyResp] = await Promise.all([
+      const [proxyResp, passthroughResp] = await Promise.all([
         requestCatPawOpenAdminJson({ apiBase: normalizedBase, path: 'admin/proxy', method: 'GET' }),
-        requestCatPawOpenAdminJson({ apiBase: normalizedBase, path: 'admin/goproxy', method: 'GET' }),
+        requestCatPawOpenAdminJson({ apiBase: normalizedBase, path: 'admin/passthrough', method: 'GET' }),
       ]);
       const proxyInput = document.querySelector('#catPawOpenSettingsForm input[name="catPawOpenProxy"]');
       if (proxyInput && proxyResp && typeof proxyResp.proxy === 'string') proxyInput.value = proxyResp.proxy || '';
-      const enabledInput = document.getElementById('catPawOpenGoProxyEnabled');
-      if (enabledInput && goProxyResp && goProxyResp.goProxy) {
-        enabledInput.checked = !!goProxyResp.goProxy.enabled;
-      }
-      const interceptBaiduInput = document.getElementById('catPawOpenInterceptBaidu');
-      const interceptQuarkInput = document.getElementById('catPawOpenInterceptQuark');
-      if (interceptBaiduInput && goProxyResp && goProxyResp.interceptPans) {
-        interceptBaiduInput.checked = !!goProxyResp.interceptPans.baidu;
-      }
-      if (interceptQuarkInput && goProxyResp && goProxyResp.interceptPans) {
-        interceptQuarkInput.checked = !!goProxyResp.interceptPans.quark;
+      const directLinkInput = document.getElementById('catPawOpenDirectLinkEnabled');
+      if (directLinkInput && passthroughResp && passthroughResp.passthrough) {
+        // CatPawOpen passthrough.enabled === "use CatPawOpen proxy"; direct-link is the inverse.
+        directLinkInput.checked = !passthroughResp.passthrough.enabled;
       }
       setCatPawOpenRemoteState('ready');
-      return { ok: true, data: { proxyResp, goProxyResp } };
+      return { ok: true, data: { proxyResp, passthroughResp } };
     } catch (e) {
       setCatPawOpenRemoteState('error');
       return { ok: false, skipped: false, reason: 'error', error: e };
@@ -485,17 +477,12 @@ export function initDashboardPage(bootstrap = {}) {
     const normalizedBase = normalizeCatPawOpenAdminBase(apiBase);
     if (!normalizedBase) return { ok: false, skipped: true, reason: 'unconfigured' };
     const syncProxy = opts && Object.prototype.hasOwnProperty.call(opts, 'proxy') ? !!opts.proxy : true;
-    const syncGoProxy = opts && Object.prototype.hasOwnProperty.call(opts, 'goproxy') ? !!opts.goproxy : true;
+    const syncPassthrough =
+      opts && Object.prototype.hasOwnProperty.call(opts, 'passthrough') ? !!opts.passthrough : true;
     const proxyInput = document.querySelector('#catPawOpenSettingsForm input[name="catPawOpenProxy"]');
     const proxy = proxyInput && typeof proxyInput.value === 'string' ? proxyInput.value : '';
-    const enabledInput = document.getElementById('catPawOpenGoProxyEnabled');
-    const interceptBaiduInput = document.getElementById('catPawOpenInterceptBaidu');
-    const interceptQuarkInput = document.getElementById('catPawOpenInterceptQuark');
-    const enabled = !!(enabledInput && enabledInput.checked);
-    const interceptPans = {
-      baidu: !!(interceptBaiduInput && interceptBaiduInput.checked),
-      quark: !!(interceptQuarkInput && interceptQuarkInput.checked),
-    };
+    const directLinkInput = document.getElementById('catPawOpenDirectLinkEnabled');
+    const directLinkEnabled = !!(directLinkInput && directLinkInput.checked);
     const parts = [];
     if (syncProxy) {
       try {
@@ -509,16 +496,17 @@ export function initDashboardPage(bootstrap = {}) {
         parts.push('代理同步失败');
       }
     }
-    if (syncGoProxy) {
+    if (syncPassthrough) {
       try {
         await requestCatPawOpenAdminJson({
           apiBase: normalizedBase,
-          path: 'admin/goproxy',
+          path: 'admin/passthrough',
           method: 'PUT',
-          body: { enabled, interceptPans },
+          // CatPawOpen passthrough.enabled === "use CatPawOpen proxy"; direct-link is the inverse.
+          body: { enabled: !directLinkEnabled },
         });
       } catch (err) {
-        parts.push('GoProxy 同步失败');
+        parts.push('透传同步失败');
       }
     }
     return { ok: !parts.length, parts };
@@ -629,17 +617,19 @@ export function initDashboardPage(bootstrap = {}) {
     const out = [];
     const seen = new Set();
     arr.forEach((s) => {
-      const base = normalizeHttpBase(s && s.base);
+      const base = typeof s === 'string' ? normalizeHttpBase(s) : normalizeHttpBase(s && s.base);
       if (!base) return;
       const key = base.toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
-      const pans = s && typeof s.pans === 'object' && s.pans ? s.pans : {};
+      const pans = s && typeof s === 'object' && typeof s.pans === 'object' && s.pans ? s.pans : {};
+      const hasBaidu = Object.prototype.hasOwnProperty.call(pans, 'baidu');
+      const hasQuark = Object.prototype.hasOwnProperty.call(pans, 'quark');
       out.push({
         base,
         pans: {
-          baidu: !!pans.baidu,
-          quark: !!pans.quark,
+          baidu: hasBaidu ? !!pans.baidu : true,
+          quark: hasQuark ? !!pans.quark : true,
         },
       });
     });
@@ -662,31 +652,6 @@ export function initDashboardPage(bootstrap = {}) {
 
 	      const baseSpan = createEl('span', { className: 'min-w-0 flex-1 truncate', text: server.base });
 
-	      const toggles = createEl('div', { className: 'flex items-center gap-3 shrink-0' });
-
-	      const mkToggle = (panKey, labelText) => {
-	        const wrap = createEl('div', { className: 'flex items-center gap-2' });
-	        const t = createEl('span', { className: CLS.mutedXs, text: labelText });
-        const { label, input } = createSwitchLabel({
-          checked: !!(server.pans && server.pans[panKey]),
-          onChange: () => {
-          const next = goProxyServers.slice();
-          const cur = next[idx];
-          if (!cur) return;
-          cur.pans = Object.assign({}, cur.pans, { [panKey]: !!input.checked });
-          next[idx] = cur;
-          goProxyServers = next;
-          renderGoProxyServerList();
-          },
-        });
-        wrap.appendChild(t);
-        wrap.appendChild(label);
-        return wrap;
-      };
-
-      toggles.appendChild(mkToggle('baidu', '百度'));
-      toggles.appendChild(mkToggle('quark', '夸克'));
-
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className =
@@ -698,7 +663,6 @@ export function initDashboardPage(bootstrap = {}) {
       });
 
       li.appendChild(baseSpan);
-      li.appendChild(toggles);
       li.appendChild(delBtn);
       goProxyServerList.appendChild(li);
     });
@@ -2128,6 +2092,7 @@ export function initDashboardPage(bootstrap = {}) {
         const apiInput = catForm ? catForm.querySelector('input[name="catPawOpenApiBase"]') : null;
         if (apiInput) apiInput.value = settings.catPawOpenApiBase || '';
 
+        if (goProxyEnabledInput) goProxyEnabledInput.checked = !!settings.goProxyEnabled;
         if (goProxyAutoSelectInput) goProxyAutoSelectInput.checked = !!settings.goProxyAutoSelect;
         const parsedServers = normalizeGoProxyServers(
           safeParseJsonArray(settings.goProxyServersJson || settings.goProxyServers || '[]')
@@ -2205,7 +2170,7 @@ export function initDashboardPage(bootstrap = {}) {
             return;
           }
 
-          const sync = await syncCatPawOpenRemoteSettings(apiBase, { proxy: true, goproxy: true });
+          const sync = await syncCatPawOpenRemoteSettings(apiBase, { proxy: true, passthrough: true });
           await refreshCatPawOpenRemoteSettings(apiBase);
           if (sync && sync.parts && sync.parts.length) setCatPawOpenSaveStatus('error', 'CatPawOpen 同步失败');
           else setCatPawOpenSaveStatus('success', '保存成功');
@@ -2231,7 +2196,7 @@ export function initDashboardPage(bootstrap = {}) {
           return;
         }
         goProxyServers = normalizeGoProxyServers(
-          goProxyServers.concat([{ base: normalized, pans: { baidu: true, quark: false } }])
+          goProxyServers.concat([{ base: normalized, pans: { baidu: true, quark: true } }])
         );
         renderGoProxyServerList();
         goProxyServerInput.value = '';
@@ -2247,39 +2212,15 @@ export function initDashboardPage(bootstrap = {}) {
         const serversJson = JSON.stringify(goProxyServers || []);
         if (goProxyServersJsonInput) goProxyServersJsonInput.value = serversJson;
         const { resp, data } = await postForm(goProxySettingsForm.action, {
+          goProxyEnabled: goProxyEnabledInput && goProxyEnabledInput.checked ? '1' : '0',
           goProxyAutoSelect: goProxyAutoSelectInput && goProxyAutoSelectInput.checked ? '1' : '0',
           goProxyServersJson: serversJson,
         });
-		        if (resp.ok && data && data.success) {
-		          const apiInput = catPawOpenForm
-		            ? catPawOpenForm.querySelector('input[name="catPawOpenApiBase"]')
-	            : null;
-	          const apiBase = apiInput && typeof apiInput.value === 'string' ? apiInput.value : '';
-	          const normalizedBase = normalizeCatPawOpenAdminBase(apiBase);
-	          if (!normalizedBase) {
-	            setGoProxyStatus('success', '保存成功');
-	            await refreshCatPawOpenRemoteSettings(apiBase);
-	            return;
-	          }
-
-		          const enabledWrapEl = document.getElementById('catPawOpenGoProxyEnabledWrap');
-		          const canSync = !!(enabledWrapEl && !enabledWrapEl.classList.contains('hidden'));
-		          if (!canSync) {
-		            setGoProxyStatus('success', '保存成功');
-		            await refreshCatPawOpenRemoteSettings(apiBase);
-		            return;
-		          }
-
-		          const sync = await syncCatPawOpenRemoteSettings(apiBase, { proxy: false, goproxy: true });
-		          await refreshCatPawOpenRemoteSettings(apiBase);
-		          if (sync && sync.parts && sync.parts.length) {
-		            setGoProxyStatus('error', 'CatPawOpen 同步失败');
-		          } else {
-		            setGoProxyStatus('success', '保存成功');
-		          }
-	        } else {
-	          setGoProxyStatus('error', (data && data.message) || '保存失败');
-	        }
+        if (resp.ok && data && data.success) {
+          setGoProxyStatus('success', '保存成功');
+        } else {
+          setGoProxyStatus('error', (data && data.message) || '保存失败');
+        }
 	      } catch (_e) {
         setGoProxyStatus('error', '保存失败');
       } finally {

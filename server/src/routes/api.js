@@ -27,10 +27,21 @@ function normalizeGoProxyServers(value) {
   const out = [];
   const seen = new Set();
   for (const it of list) {
-    const base = normalizeHttpBase(it && typeof it.base === 'string' ? it.base : '');
+    const base =
+      typeof it === 'string'
+        ? normalizeHttpBase(it)
+        : normalizeHttpBase(it && typeof it.base === 'string' ? it.base : '');
     if (!base || seen.has(base)) continue;
-    const pans = it && typeof it.pans === 'object' && it.pans ? it.pans : {};
-    out.push({ base, pans: { baidu: !!pans.baidu, quark: !!pans.quark } });
+    const pans = it && typeof it === 'object' && typeof it.pans === 'object' && it.pans ? it.pans : {};
+    const hasBaidu = Object.prototype.hasOwnProperty.call(pans, 'baidu');
+    const hasQuark = Object.prototype.hasOwnProperty.call(pans, 'quark');
+    out.push({
+      base,
+      pans: {
+        baidu: hasBaidu ? !!pans.baidu : true,
+        quark: hasQuark ? !!pans.quark : true,
+      },
+    });
     seen.add(base);
   }
   return out;
@@ -624,6 +635,7 @@ function createApiRouter() {
           settings.videoSourceUrl = get('video_source_url') || '';
           settings.videoSourceApiBase = get('video_source_api_base') || '';
           settings.catPawOpenApiBase = get('catpawopen_api_base') || '';
+          settings.goProxyEnabled = String(get('goproxy_enabled') || '') === '1';
           settings.goProxyAutoSelect = String(get('goproxy_auto_select') || '') === '1';
           settings.goProxyServers = normalizeGoProxyServers(get('goproxy_servers') || '[]');
           settings.magicEpisodeRules = safeParseJsonArray(get('magic_episode_rules') || '[]').filter(

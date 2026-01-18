@@ -1847,10 +1847,21 @@ const normalizeGoProxyServers = (value) => {
   const out = [];
   const seen = new Set();
   for (const it of list) {
-    const base = normalizeHttpBase(it && typeof it.base === 'string' ? it.base : '');
+    const base =
+      typeof it === 'string'
+        ? normalizeHttpBase(it)
+        : normalizeHttpBase(it && typeof it.base === 'string' ? it.base : '');
     if (!base || seen.has(base)) continue;
-    const pans = it && typeof it.pans === 'object' && it.pans ? it.pans : {};
-    out.push({ base, pans: { baidu: !!pans.baidu, quark: !!pans.quark } });
+    const pans = it && typeof it === 'object' && typeof it.pans === 'object' && it.pans ? it.pans : {};
+    const hasBaidu = Object.prototype.hasOwnProperty.call(pans, 'baidu');
+    const hasQuark = Object.prototype.hasOwnProperty.call(pans, 'quark');
+    out.push({
+      base,
+      pans: {
+        baidu: hasBaidu ? !!pans.baidu : true,
+        quark: hasQuark ? !!pans.quark : true,
+      },
+    });
     seen.add(base);
   }
   return out;
@@ -2080,7 +2091,9 @@ const requestPlay = async () => {
 		      return;
 		    }
 	      const rawHeaders = payload && payload.header && typeof payload.header === 'object' ? payload.header : {};
-	      const proxyHint = !!(payload && typeof payload === 'object' && payload.proxyHint === true);
+	      const proxyHintFromPayload = !!(payload && typeof payload === 'object' && payload.proxyHint === true);
+	      const goProxyEnabled = !!props.bootstrap?.settings?.goProxyEnabled;
+	      const proxyHint = goProxyEnabled || proxyHintFromPayload;
 	      let finalUrl = url;
       let finalHeaders = rawHeaders;
       try {

@@ -402,30 +402,15 @@
 		                >
 		                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">保存后将同步到 CatPawOpen 并立即生效（留空关闭）。</p>
 		              </div>
-		              <div class="space-y-3 pt-1">
-		                <div class="text-sm font-medium text-gray-700 dark:text-gray-200">网盘透传设置</div>
-
-		                <div class="space-y-1">
-		                  <div class="text-sm font-medium text-gray-700 dark:text-gray-200">百度</div>
-		                  <div>
-		                    <label class="enable-switch" title="百度透传">
-		                      <input id="catPawOpenInterceptBaidu" name="catPawOpenInterceptBaidu" type="checkbox" />
-		                      <span class="enable-slider"></span>
-		                    </label>
-		                  </div>
-		                  <div class="text-xs text-gray-500 dark:text-gray-400">开启后会拦截该网盘直链并走代理透传。</div>
+		              <div class="space-y-1 pt-1">
+		                <div class="text-sm font-medium text-gray-700 dark:text-gray-200">直链返回</div>
+		                <div>
+		                  <label class="enable-switch" title="直链返回">
+		                    <input id="catPawOpenDirectLinkEnabled" name="catPawOpenDirectLinkEnabled" type="checkbox" />
+		                    <span class="enable-slider"></span>
+		                  </label>
 		                </div>
-
-		                <div class="space-y-1">
-		                  <div class="text-sm font-medium text-gray-700 dark:text-gray-200">夸克</div>
-		                  <div>
-		                    <label class="enable-switch" title="夸克透传">
-		                      <input id="catPawOpenInterceptQuark" name="catPawOpenInterceptQuark" type="checkbox" />
-		                      <span class="enable-slider"></span>
-		                    </label>
-		                  </div>
-		                  <div class="text-xs text-gray-500 dark:text-gray-400">开启后会拦截该网盘直链并走代理透传。</div>
-		                </div>
+		                <div class="text-xs text-gray-500 dark:text-gray-400">开启后返回直链地址与所需 header；关闭后返回 CatPawOpen 内置 proxy 作为播放地址。</div>
 		              </div>
 		              </div>
 		              <div class="pt-1 flex justify-start">
@@ -440,11 +425,11 @@
 	              <div id="goProxySaveStatus" class="text-xs hidden whitespace-nowrap text-gray-500 dark:text-gray-400"></div>
 	            </div>
 		            <form id="goProxySettingsForm" method="post" action="/dashboard/goproxy/save" class="space-y-4">
-		              <div id="catPawOpenGoProxyEnabledWrap" class="hidden space-y-1">
+		              <div class="space-y-1">
 		                <div class="text-sm font-medium text-gray-700 dark:text-gray-200">GoProxy 启用</div>
 		                <div>
 		                  <label class="enable-switch" title="GoProxy 启用">
-		                    <input id="catPawOpenGoProxyEnabled" name="goProxyEnabled" type="checkbox" />
+		                    <input id="goProxyEnabled" name="goProxyEnabled" type="checkbox" :checked="bootstrap.settings.goProxyEnabled" />
 		                    <span class="enable-slider"></span>
 		                  </label>
 		                </div>
