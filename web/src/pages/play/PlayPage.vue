@@ -1912,7 +1912,7 @@ const goProxyPickState = {
 };
 
 const speedTestGoProxyBase = async (base, bytes = 2 * 1024 * 1024, timeoutMs = 8000) => {
-  const url = joinBaseUrl(base, `api/speed?bytes=${encodeURIComponent(String(bytes))}&_=${Date.now()}`);
+  const url = joinBaseUrl(base, `speed?bytes=${encodeURIComponent(String(bytes))}&_=${Date.now()}`);
   if (!url) throw new Error('invalid speed url');
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const t = setTimeout(() => {
@@ -1996,11 +1996,9 @@ const pickGoProxyBaseForPlayback = async (pan = '') => {
   }
 };
 
-const registerGoProxyToken = async ({ base, pan, url, headers }) => {
+const registerGoProxyToken = async ({ base, url, headers }) => {
   const b = normalizeHttpBase(base);
   if (!b) throw new Error('missing goProxy base');
-  const p = pan === 'baidu' || pan === 'quark' ? pan : '';
-  if (!p) throw new Error('unsupported pan');
   const targetUrl = typeof url === 'string' ? url.trim() : '';
   if (!targetUrl) throw new Error('missing play url');
   const safeHeaders = {};
@@ -2009,7 +2007,7 @@ const registerGoProxyToken = async ({ base, pan, url, headers }) => {
     const v = h[k] || h[k.toLowerCase()];
     if (typeof v === 'string' && v.trim()) safeHeaders[k] = v.trim();
   });
-  const registerUrl = joinBaseUrl(b, `api/${p}/register`);
+  const registerUrl = joinBaseUrl(b, 'register');
   if (!registerUrl) throw new Error('invalid register url');
   const resp = await fetch(registerUrl, {
     method: 'POST',
@@ -2027,7 +2025,7 @@ const registerGoProxyToken = async ({ base, pan, url, headers }) => {
   }
   const token = data && data.token ? String(data.token).trim() : '';
   if (!token) throw new Error('missing token');
-  const proxyUrl = joinBaseUrl(b, `spider/proxy/${p}/${encodeURIComponent(token)}`);
+  const proxyUrl = joinBaseUrl(b, `token/${encodeURIComponent(token)}`);
   if (!proxyUrl) throw new Error('invalid proxy url');
   return { token, proxyUrl };
 };
@@ -2038,7 +2036,7 @@ const maybeUseGoProxyForPlayback = async (playUrl, playHeaders, preferredPan = '
   if (!pan) return { url: playUrl, headers: playHeaders };
   const base = await pickGoProxyBaseForPlayback(pan);
   if (!base) return { url: playUrl, headers: playHeaders };
-  const { proxyUrl } = await registerGoProxyToken({ base, pan, url: playUrl, headers: playHeaders });
+  const { proxyUrl } = await registerGoProxyToken({ base, url: playUrl, headers: playHeaders });
   return { url: proxyUrl, headers: {} };
 };
 
