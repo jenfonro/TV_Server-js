@@ -2012,20 +2012,24 @@ const openListResolveRedirectedUrl = async ({ apiBase, mountPath, username, file
     } catch (_e) {}
   }, 8000);
   try {
-    const resp = await fetch(downloadUrl, {
-      method: 'GET',
-      redirect: 'follow',
-      credentials: 'omit',
-      cache: 'no-store',
-      signal: controller ? controller.signal : undefined,
-    });
-    const finalUrl = resp && typeof resp.url === 'string' ? resp.url.trim() : '';
     try {
-      if (resp && resp.body && typeof resp.body.cancel === 'function') resp.body.cancel();
-    } catch (_e) {}
-    if (!finalUrl) throw new Error('openlist redirect url empty');
-    if (!/^https?:\/\//i.test(finalUrl)) throw new Error('openlist redirect url invalid');
-    return finalUrl;
+      // Prefer HEAD to avoid downloading the media while resolving redirects.
+      const resp = await fetch(downloadUrl, {
+        method: 'HEAD',
+        redirect: 'follow',
+        credentials: 'omit',
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined,
+      });
+      const finalUrl = resp && typeof resp.url === 'string' ? resp.url.trim() : '';
+      if (finalUrl && /^https?:\/\//i.test(finalUrl)) return finalUrl;
+    } catch (_e) {
+      // ignore; fallback below
+    }
+
+    // CORS may prevent resolving the final redirected URL via fetch, but the browser can still
+    // play the OpenList /d/... URL directly (it will follow 302 during media load).
+    return downloadUrl;
   } finally {
     clearTimeout(t);
   }
@@ -2264,8 +2268,9 @@ const requestPlay = async () => {
 	          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
 	          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
 	          const mount = normalizeOpenListMountPath(openListMount);
-	          const name = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
-	          const refreshPath = `${mount}${userDir}/${name}/`.replace(/\/{2,}/g, '/');
+	          const nameRaw = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
+	          const name = nameRaw.replace(/^\/+|\/+$/g, '');
+	          const refreshPath = `${mount}${userDir}/${name}/`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '/');
 	          let quarkTvFallbackPlay = null;
 
 	          let refreshOk = false;
