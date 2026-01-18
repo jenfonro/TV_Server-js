@@ -2025,7 +2025,7 @@ const registerGoProxyToken = async ({ base, url, headers }) => {
   }
   const token = data && data.token ? String(data.token).trim() : '';
   if (!token) throw new Error('missing token');
-  const proxyUrl = joinBaseUrl(b, `token/${encodeURIComponent(token)}`);
+  const proxyUrl = joinBaseUrl(b, encodeURIComponent(token));
   if (!proxyUrl) throw new Error('invalid proxy url');
   return { token, proxyUrl };
 };
