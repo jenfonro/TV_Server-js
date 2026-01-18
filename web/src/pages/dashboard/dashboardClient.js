@@ -454,62 +454,52 @@ export function initDashboardPage(bootstrap = {}) {
       return { ok: false, skipped: true, reason: 'unconfigured' };
     }
     try {
-      const [proxyResp, passthroughResp] = await Promise.all([
-        requestCatPawOpenAdminJson({ apiBase: normalizedBase, path: 'admin/proxy', method: 'GET' }),
-        requestCatPawOpenAdminJson({ apiBase: normalizedBase, path: 'admin/passthrough', method: 'GET' }),
-      ]);
+      const settingsResp = await requestCatPawOpenAdminJson({
+        apiBase: normalizedBase,
+        path: 'admin/settings',
+        method: 'GET',
+      });
       const proxyInput = document.querySelector('#catPawOpenSettingsForm input[name="catPawOpenProxy"]');
-      if (proxyInput && proxyResp && typeof proxyResp.proxy === 'string') proxyInput.value = proxyResp.proxy || '';
+      if (proxyInput && settingsResp && settingsResp.settings && typeof settingsResp.settings.proxy === 'string') {
+        proxyInput.value = settingsResp.settings.proxy || '';
+      }
       const directLinkInput = document.getElementById('catPawOpenDirectLinkEnabled');
-      if (directLinkInput && passthroughResp && passthroughResp.passthrough) {
-        // CatPawOpen passthrough.enabled === "use CatPawOpen proxy"; direct-link is the inverse.
-        directLinkInput.checked = !passthroughResp.passthrough.enabled;
+      if (directLinkInput && settingsResp && settingsResp.settings) {
+        directLinkInput.checked = !!settingsResp.settings.directLinkEnabled;
       }
       setCatPawOpenRemoteState('ready');
-      return { ok: true, data: { proxyResp, passthroughResp } };
+      return { ok: true, data: { settingsResp } };
     } catch (e) {
       setCatPawOpenRemoteState('error');
       return { ok: false, skipped: false, reason: 'error', error: e };
     }
   };
 
-  const syncCatPawOpenRemoteSettings = async (apiBase, opts = {}) => {
+  const syncCatPawOpenRemoteSettings = async (apiBase) => {
     const normalizedBase = normalizeCatPawOpenAdminBase(apiBase);
     if (!normalizedBase) return { ok: false, skipped: true, reason: 'unconfigured' };
-    const syncProxy = opts && Object.prototype.hasOwnProperty.call(opts, 'proxy') ? !!opts.proxy : true;
-    const syncPassthrough =
-      opts && Object.prototype.hasOwnProperty.call(opts, 'passthrough') ? !!opts.passthrough : true;
     const proxyInput = document.querySelector('#catPawOpenSettingsForm input[name="catPawOpenProxy"]');
     const proxy = proxyInput && typeof proxyInput.value === 'string' ? proxyInput.value : '';
     const directLinkInput = document.getElementById('catPawOpenDirectLinkEnabled');
     const directLinkEnabled = !!(directLinkInput && directLinkInput.checked);
     const parts = [];
-    if (syncProxy) {
-      try {
-        await requestCatPawOpenAdminJson({
-          apiBase: normalizedBase,
-          path: 'admin/proxy',
-          method: 'PUT',
-          body: { proxy: String(proxy || '') },
-        });
-      } catch (err) {
-        parts.push('代理同步失败');
+    try {
+      const resp = await requestCatPawOpenAdminJson({
+        apiBase: normalizedBase,
+        path: 'admin/settings',
+        method: 'PUT',
+        body: { proxy: String(proxy || ''), directLinkEnabled },
+      });
+      if (proxyInput && resp && resp.settings && typeof resp.settings.proxy === 'string') {
+        proxyInput.value = resp.settings.proxy || '';
       }
+      if (directLinkInput && resp && resp.settings) directLinkInput.checked = !!resp.settings.directLinkEnabled;
+      return { ok: true, parts: [], data: resp };
+    } catch (err) {
+      const msg = err && err.message ? String(err.message) : '同步失败';
+      parts.push(msg);
+      return { ok: false, parts };
     }
-    if (syncPassthrough) {
-      try {
-        await requestCatPawOpenAdminJson({
-          apiBase: normalizedBase,
-          path: 'admin/passthrough',
-          method: 'PUT',
-          // CatPawOpen passthrough.enabled === "use CatPawOpen proxy"; direct-link is the inverse.
-          body: { enabled: !directLinkEnabled },
-        });
-      } catch (err) {
-        parts.push('透传同步失败');
-      }
-    }
-    return { ok: !parts.length, parts };
   };
 
   const unwrapCatPawOpenWebsiteData = (resp) => {
@@ -2196,9 +2186,8 @@ export function initDashboardPage(bootstrap = {}) {
             return;
           }
 
-          const sync = await syncCatPawOpenRemoteSettings(apiBase, { proxy: true, passthrough: true });
-          await refreshCatPawOpenRemoteSettings(apiBase);
-          if (sync && sync.parts && sync.parts.length) setCatPawOpenSaveStatus('error', 'CatPawOpen 同步失败');
+          const sync = await syncCatPawOpenRemoteSettings(apiBase);
+          if (sync && sync.ok === false) setCatPawOpenSaveStatus('error', 'CatPawOpen 同步失败');
           else setCatPawOpenSaveStatus('success', '保存成功');
         } catch (_err) {
           setCatPawOpenSaveStatus('error', '保存失败');
