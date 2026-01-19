@@ -1868,8 +1868,6 @@ const normalizeGoProxyServers = (value) => {
 };
 
 const detectGoProxyPan = (playUrl, playHeaders, preferredPan = '') => {
-  const preferred = typeof preferredPan === 'string' ? preferredPan.trim().toLowerCase() : '';
-  if (preferred === 'baidu' || preferred === 'quark') return preferred;
   const raw = typeof playUrl === 'string' ? playUrl.trim() : '';
   if (!raw) return '';
   try {
@@ -2265,13 +2263,13 @@ const requestPlay = async () => {
 	        if (shouldQuarkTv) {
 	          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
 	          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
-	          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
-	          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
-	          const mount = normalizeOpenListMountPath(openListMount);
-	          const nameRaw = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
-	          const name = nameRaw.replace(/^\/+|\/+$/g, '');
-	          const refreshPath = `${mount}${userDir}/${name}/`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '/');
-	          let quarkTvFallbackPlay = null;
+		          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
+		          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
+		          const mount = normalizeOpenListMountPath(openListMount);
+		          const nameRaw = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
+		          const name = nameRaw.replace(/^\/+|\/+$/g, '');
+		          const refreshPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '');
+		          let quarkTvFallbackPlay = null;
 
 	          let refreshOk = false;
 	          try {

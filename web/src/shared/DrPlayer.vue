@@ -321,6 +321,7 @@ let cleanupPipListeners = null;
 let cleanupFsListeners = null;
 let cleanupNativeVideoListeners = null;
 let cleanupPlayerElListeners = null;
+let cleanupNoCorsEnforcer = null;
 
 let timeUpdateRaf = 0;
 let timeUpdatePending = 0;
@@ -490,22 +491,26 @@ const detectVideoFormat = (url) => {
     }
   } catch (_e) {}
 
-  try {
-    if (typeof cleanupPipListeners === 'function') cleanupPipListeners();
-  } catch (_e) {}
-  cleanupPipListeners = null;
-  try {
-    if (typeof cleanupFsListeners === 'function') cleanupFsListeners();
-  } catch (_e) {}
-  cleanupFsListeners = null;
-  try {
-    if (typeof cleanupNativeVideoListeners === 'function') cleanupNativeVideoListeners();
-  } catch (_e) {}
-  cleanupNativeVideoListeners = null;
-  try {
-    if (typeof cleanupPlayerElListeners === 'function') cleanupPlayerElListeners();
-  } catch (_e) {}
-  cleanupPlayerElListeners = null;
+	  try {
+	    if (typeof cleanupPipListeners === 'function') cleanupPipListeners();
+	  } catch (_e) {}
+	  cleanupPipListeners = null;
+	  try {
+	    if (typeof cleanupFsListeners === 'function') cleanupFsListeners();
+	  } catch (_e) {}
+	  cleanupFsListeners = null;
+	  try {
+	    if (typeof cleanupNoCorsEnforcer === 'function') cleanupNoCorsEnforcer();
+	  } catch (_e) {}
+	  cleanupNoCorsEnforcer = null;
+	  try {
+	    if (typeof cleanupNativeVideoListeners === 'function') cleanupNativeVideoListeners();
+	  } catch (_e) {}
+	  cleanupNativeVideoListeners = null;
+	  try {
+	    if (typeof cleanupPlayerElListeners === 'function') cleanupPlayerElListeners();
+	  } catch (_e) {}
+	  cleanupPlayerElListeners = null;
 
   try {
     const v = art && art.video ? art.video : null;
@@ -609,18 +614,29 @@ const detectVideoFormat = (url) => {
 	  },
 	};
 
-const init = () => {
-  const url = (props.url || '').trim();
-  if (!container.value || !url) return;
+	const init = () => {
+	  const url = (props.url || '').trim();
+	  if (!container.value || !url) return;
 
   if (art) destroyNow();
   isPip.value = false;
 
-  const format = detectVideoFormat(url);
-  const playUrlForArt = url;
-  const artType =
-    format === 'hls'
-      ? 'm3u8'
+	  const format = detectVideoFormat(url);
+	  const playUrlForArt = url;
+	  const isCrossOriginUrl = (u) => {
+	    const raw = typeof u === 'string' ? u.trim() : '';
+	    if (!raw) return false;
+	    try {
+	      const parsed = new URL(raw, window.location.href);
+	      return parsed.origin !== window.location.origin;
+	    } catch (_e) {
+	      return false;
+	    }
+	  };
+	  const isCrossOriginNative = format === 'native' && isCrossOriginUrl(playUrlForArt);
+	  const artType =
+	    format === 'hls'
+	      ? 'm3u8'
       : format === 'flv'
         ? 'flv'
         : format === 'dash'
@@ -639,9 +655,9 @@ const init = () => {
     } catch (_e) {}
   };
 
-  art = new Artplayer({
-    container: container.value,
-    url: playUrlForArt,
+	  art = new Artplayer({
+	    container: container.value,
+	    url: playUrlForArt,
     poster: props.poster || '',
     autoplay: !!props.autoplay,
     muted: false,
@@ -653,10 +669,11 @@ const init = () => {
     autoSize: false,
     autoMini: false,
     setting: false,
-    playbackRate: false,
-    aspectRatio: false,
-    screenshot: true,
-    playsInline: true,
+	    playbackRate: false,
+	    aspectRatio: false,
+	    // For cross-site MP4, enabling screenshot may force `<video crossorigin>` and trigger CORS-mode requests.
+	    screenshot: !isCrossOriginNative,
+	    playsInline: true,
     // Disable built-in touch gestures on mobile so taps don't also toggle play/pause
     // (we handle mobile UI + play controls ourselves).
     gesture: !isMobile.value,
@@ -756,14 +773,33 @@ const init = () => {
     desktopControlsVisible.value = true;
   }
 
-  // iOS Safari quirks: ensure inline playback attributes are present on the real video element.
-  try {
-    const v = art.video;
-    if (v) {
-      v.setAttribute('playsinline', '');
-      v.setAttribute('webkit-playsinline', '');
-      v.setAttribute('x-webkit-airplay', 'allow');
-      v.setAttribute('preload', 'metadata');
+		  // iOS Safari quirks: ensure inline playback attributes are present on the real video element.
+		  try {
+		    const v = art.video;
+		    if (v) {
+		      if (isCrossOriginNative) {
+		        const enforceNoCors = () => {
+		          try {
+		            v.removeAttribute('crossorigin');
+		          } catch (_e) {}
+		        };
+		        enforceNoCors();
+		        try {
+		          if (typeof MutationObserver === 'function') {
+		            const obs = new MutationObserver(() => enforceNoCors());
+		            obs.observe(v, { attributes: true, attributeFilter: ['crossorigin'] });
+		            cleanupNoCorsEnforcer = () => {
+		              try {
+		                obs.disconnect();
+		              } catch (_e) {}
+		            };
+		          }
+		        } catch (_e) {}
+		      }
+		      v.setAttribute('playsinline', '');
+		      v.setAttribute('webkit-playsinline', '');
+		      v.setAttribute('x-webkit-airplay', 'allow');
+	      v.setAttribute('preload', 'metadata');
       try {
         v.preload = 'metadata';
       } catch (_e) {}
