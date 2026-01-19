@@ -2,6 +2,8 @@
 
 > 🎬 **TV_Server** 是一个 Node.js + Vue 的影视聚合 Web 应用。它通过 CatPawOpen 的 `/spider/*` 能力完成站点搜索/详情/播放解析，并提供后台管理页面用于配置与维护。
 
+# 改用go作为后端,此仓库不再更新
+
 <div align="center">
 
 ![Node.js](https://img.shields.io/badge/Node.js-20-3c873a?logo=nodedotjs&logoColor=white)
