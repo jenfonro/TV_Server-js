@@ -782,12 +782,15 @@ const detectVideoFormat = (url) => {
 		          try {
 		            v.removeAttribute('crossorigin');
 		          } catch (_e) {}
+		          try {
+		            v.setAttribute('referrerpolicy', 'no-referrer');
+		          } catch (_e) {}
 		        };
 		        enforceNoCors();
 		        try {
 		          if (typeof MutationObserver === 'function') {
 		            const obs = new MutationObserver(() => enforceNoCors());
-		            obs.observe(v, { attributes: true, attributeFilter: ['crossorigin'] });
+		            obs.observe(v, { attributes: true, attributeFilter: ['crossorigin', 'referrerpolicy'] });
 		            cleanupNoCorsEnforcer = () => {
 		              try {
 		                obs.disconnect();
