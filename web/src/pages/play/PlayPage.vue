@@ -1924,15 +1924,6 @@ const normalizeOpenListMountPath = (value) => {
   return p;
 };
 
-const encodePathPreserveSlashes = (path) => {
-  const raw = typeof path === 'string' ? path : '';
-  if (!raw) return '';
-  return raw
-    .split('/')
-    .map((seg) => encodeURIComponent(seg))
-    .join('/');
-};
-
 const isQuarkPanLabel = (label) => {
   const s = typeof label === 'string' ? label : '';
   if (!s) return false;
@@ -2222,48 +2213,48 @@ const requestPlay = async () => {
       let disableGoProxy = false;
 
         if (shouldQuarkTv) {
-          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
-          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
+		          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
+		          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
 		          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
 		          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
 		          const mount = normalizeOpenListMountPath(openListMount);
-              const nameRaw = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
-              const name = nameRaw.replace(/^\/+|\/+$/g, '');
-              const refreshPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '');
-              let quarkTvFallbackPlay = null;
+		          const nameRaw = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
+		          const name = nameRaw.replace(/^\/+|\/+$/g, '');
+		          const refreshPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '');
 
-          let rawUrlFromOpenList = '';
-          try {
-            rawUrlFromOpenList = await withRetries(3, async () => {
-              return await openListRefreshPath({ apiBase: openListApiBase, token: openListToken, path: refreshPath });
-            });
-          } catch (_e) {
-            rawUrlFromOpenList = '';
-          }
+		          let rawUrlFromOpenList = '';
+		          try {
+		            rawUrlFromOpenList = await withRetries(3, async () => {
+		              return await openListRefreshPath({ apiBase: openListApiBase, token: openListToken, path: refreshPath });
+		            });
+		          } catch (_e) {
+		            rawUrlFromOpenList = '';
+		          }
 
-          if (!rawUrlFromOpenList) {
-            try {
-              quarkTvFallbackPlay = await fetchPlay({ quark_tv: '0' });
-            } catch (_e) {}
-          }
+		          let quarkTvFallbackPlay = null;
+		          if (!rawUrlFromOpenList) {
+		            try {
+		              quarkTvFallbackPlay = await fetchPlay({ quark_tv: '0' });
+		            } catch (_e) {}
+		          }
 
-          if (rawUrlFromOpenList) {
-            finalUrl = rawUrlFromOpenList;
-            finalHeaders = {};
-            disableGoProxy = true;
-          } else if (quarkTvFallbackPlay && quarkTvFallbackPlay.url) {
-            finalUrl = quarkTvFallbackPlay.url;
-            finalHeaders = quarkTvFallbackPlay.rawHeaders || {};
-          } else {
-            // Fallback: request without quark_tv so CatPawOpen uses its normal logic.
-            try {
-              playResult = await fetchPlay(undefined);
-              if (playResult && playResult.url) {
-                finalUrl = playResult.url;
-                finalHeaders = playResult.rawHeaders || {};
-              }
-            } catch (__e) {}
-          }
+		          if (rawUrlFromOpenList) {
+		            finalUrl = rawUrlFromOpenList;
+		            finalHeaders = {};
+		            disableGoProxy = true;
+		          } else if (quarkTvFallbackPlay && quarkTvFallbackPlay.url) {
+		            finalUrl = quarkTvFallbackPlay.url;
+		            finalHeaders = quarkTvFallbackPlay.rawHeaders || {};
+		          } else {
+		            // Fallback: request without quark_tv so CatPawOpen uses its normal logic.
+		            try {
+		              playResult = await fetchPlay(undefined);
+		              if (playResult && playResult.url) {
+		                finalUrl = playResult.url;
+		                finalHeaders = playResult.rawHeaders || {};
+		              }
+		            } catch (__e) {}
+		          }
         }
 
       try {
@@ -2275,10 +2266,8 @@ const requestPlay = async () => {
         }
       } catch (e) {
         // Keep direct URL as fallback (GoProxy is best-effort on the client).
-        try {
-          console.warn('[GoProxy] register failed:', e && e.message ? e.message : e);
-	        } catch (_e) {}
-	      }
+        console.warn('[GoProxy] register failed:', e && e.message ? e.message : e);
+      }
         if (seqAtCall !== playRequestState.seq) return;
 		    playerMetaReady.value = false;
 		    playerUrl.value = finalUrl;
