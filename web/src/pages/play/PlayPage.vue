@@ -1982,55 +1982,15 @@ const openListRefreshPath = async ({ apiBase, token, path }) => {
   });
   const data = await resp.json().catch(() => ({}));
   const code = data && typeof data.code === 'number' ? data.code : 0;
-  if (resp.ok && code === 200) return true;
+  if (resp.ok && code === 200) {
+    const rawUrl = data && data.data && typeof data.data.raw_url === 'string' ? data.data.raw_url.trim() : '';
+    if (!rawUrl) throw new Error('missing raw_url');
+    return rawUrl;
+  }
   const msg = (data && data.message) ? String(data.message) : `HTTP ${resp.status}`;
   const err = new Error(msg);
   err.status = resp.status;
   throw err;
-};
-
-const openListResolveRedirectedUrl = async ({ apiBase, mountPath, username, fileName }) => {
-  const base = normalizeHttpBaseWithSlash(apiBase);
-  if (!base) throw new Error('openlist base invalid');
-  const mount = normalizeOpenListMountPath(mountPath);
-  if (!mount) throw new Error('openlist mount missing');
-  const userDir = `TV_Server_${sanitizeTvUsername(username)}`;
-  const nameRaw = typeof fileName === 'string' ? fileName.trim() : '';
-  const name = nameRaw.replace(/^\/+|\/+$/g, '');
-  if (!name) throw new Error('file name missing');
-
-  const rawPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '');
-  const encoded = encodePathPreserveSlashes(rawPath);
-  const downloadUrl = new URL(`d${encoded.startsWith('/') ? '' : '/'}${encoded}`, base).toString();
-
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const t = setTimeout(() => {
-    try {
-      if (controller) controller.abort();
-    } catch (_e) {}
-  }, 8000);
-  try {
-    try {
-      // Prefer HEAD to avoid downloading the media while resolving redirects.
-      const resp = await fetch(downloadUrl, {
-        method: 'HEAD',
-        redirect: 'follow',
-        credentials: 'omit',
-        cache: 'no-store',
-        signal: controller ? controller.signal : undefined,
-      });
-      const finalUrl = resp && typeof resp.url === 'string' ? resp.url.trim() : '';
-      if (finalUrl && /^https?:\/\//i.test(finalUrl)) return finalUrl;
-    } catch (_e) {
-      // ignore; fallback below
-    }
-
-    // CORS may prevent resolving the final redirected URL via fetch, but the browser can still
-    // play the OpenList /d/... URL directly (it will follow 302 during media load).
-    return downloadUrl;
-  } finally {
-    clearTimeout(t);
-  }
 };
 
 const goProxyPickState = {
@@ -2255,76 +2215,60 @@ const requestPlay = async () => {
 		      return;
 		    }
 
-	      const goProxyEnabled = !!props.bootstrap?.settings?.goProxyEnabled;
-	      const proxyHint = goProxyEnabled || playResult.proxyHintFromPayload;
-	      let finalUrl = playResult.url;
+      const goProxyEnabled = !!props.bootstrap?.settings?.goProxyEnabled;
+      const proxyHint = goProxyEnabled || playResult.proxyHintFromPayload;
+      let finalUrl = playResult.url;
       let finalHeaders = playResult.rawHeaders;
+      let disableGoProxy = false;
 
-	        if (shouldQuarkTv) {
-	          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
-	          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
+        if (shouldQuarkTv) {
+          const openListApiBase = String(props.bootstrap?.settings?.openListApiBase || '');
+          const openListToken = String(props.bootstrap?.settings?.openListToken || '');
 		          const openListMount = String(props.bootstrap?.settings?.openListQuarkTvMount || '');
 		          const userDir = `TV_Server_${sanitizeTvUsername(tvUser)}`;
 		          const mount = normalizeOpenListMountPath(openListMount);
-		          const nameRaw = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
-		          const name = nameRaw.replace(/^\/+|\/+$/g, '');
-		          const refreshPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '');
-		          let quarkTvFallbackPlay = null;
+              const nameRaw = typeof openListFileNameAtCall === 'string' ? openListFileNameAtCall.trim() : '';
+              const name = nameRaw.replace(/^\/+|\/+$/g, '');
+              const refreshPath = `${mount}${userDir}/${name}`.replace(/\/{2,}/g, '/').replace(/\/+$/g, '');
+              let quarkTvFallbackPlay = null;
 
-	          let refreshOk = false;
-	          try {
-	            refreshOk = await withRetries(3, async () => {
-	              await openListRefreshPath({ apiBase: openListApiBase, token: openListToken, path: refreshPath });
-	              return true;
-	            });
-	          } catch (_e) {
-	            refreshOk = false;
-	          }
+          let rawUrlFromOpenList = '';
+          try {
+            rawUrlFromOpenList = await withRetries(3, async () => {
+              return await openListRefreshPath({ apiBase: openListApiBase, token: openListToken, path: refreshPath });
+            });
+          } catch (_e) {
+            rawUrlFromOpenList = '';
+          }
 
-	          if (!refreshOk) {
-	            try {
-	              quarkTvFallbackPlay = await fetchPlay({ quark_tv: '0' });
-	            } catch (_e) {}
-	          }
+          if (!rawUrlFromOpenList) {
+            try {
+              quarkTvFallbackPlay = await fetchPlay({ quark_tv: '0' });
+            } catch (_e) {}
+          }
 
-	          try {
-	            const directUrl = await withRetries(3, async () => {
-	              return await openListResolveRedirectedUrl({
-	                apiBase: openListApiBase,
-	                mountPath: openListMount,
-	                username: tvUser,
-	                fileName: name,
-	              });
-	            });
-	            if (typeof directUrl === 'string' && directUrl.trim()) {
-	              finalUrl = directUrl.trim();
-	              finalHeaders = {};
-	            }
-	          } catch (_e) {
-	            if (!quarkTvFallbackPlay) {
-	              try {
-	                quarkTvFallbackPlay = await fetchPlay({ quark_tv: '0' });
-	              } catch (_e2) {}
-	            }
-	            if (quarkTvFallbackPlay && quarkTvFallbackPlay.url) {
-	              finalUrl = quarkTvFallbackPlay.url;
-	              finalHeaders = quarkTvFallbackPlay.rawHeaders || {};
-	            } else {
-	              // Fallback: request without quark_tv so CatPawOpen uses its normal logic.
-	              try {
-	                playResult = await fetchPlay(undefined);
-	                if (playResult && playResult.url) {
-	                  finalUrl = playResult.url;
-	                  finalHeaders = playResult.rawHeaders || {};
-	                }
-	              } catch (__e) {}
-	            }
-	          }
-	        }
+          if (rawUrlFromOpenList) {
+            finalUrl = rawUrlFromOpenList;
+            finalHeaders = {};
+            disableGoProxy = true;
+          } else if (quarkTvFallbackPlay && quarkTvFallbackPlay.url) {
+            finalUrl = quarkTvFallbackPlay.url;
+            finalHeaders = quarkTvFallbackPlay.rawHeaders || {};
+          } else {
+            // Fallback: request without quark_tv so CatPawOpen uses its normal logic.
+            try {
+              playResult = await fetchPlay(undefined);
+              if (playResult && playResult.url) {
+                finalUrl = playResult.url;
+                finalHeaders = playResult.rawHeaders || {};
+              }
+            } catch (__e) {}
+          }
+        }
 
       try {
         const preferredPan = guessPreferredPanFromLabel(src && src.label ? String(src.label) : '');
-        const out = await maybeUseGoProxyForPlayback(finalUrl, finalHeaders, preferredPan, proxyHint);
+        const out = await maybeUseGoProxyForPlayback(finalUrl, finalHeaders, preferredPan, proxyHint && !disableGoProxy);
         if (out && typeof out === 'object') {
           if (typeof out.url === 'string' && out.url.trim()) finalUrl = out.url.trim();
           if (out.headers && typeof out.headers === 'object') finalHeaders = out.headers;
